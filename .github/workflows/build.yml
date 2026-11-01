@@ -2,9 +2,9 @@ name: Build and Release Rust Client
 
 on:
   push:
-    branches: [ release-2.5.2 ]
+    branches: [ main ]
   pull_request:
-    branches: [ release-2.5.2 ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -316,6 +316,48 @@ jobs:
           key: ${{ runner.os }}-cargo-macos-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-macos-
+      - name: Replace tun.rs with Apple stub
+        run: |
+          cat > rust-client/tun.rs <<'EOF'
+          use anyhow::{Result, bail};
+          use std::fs::File;
+          use tokio_util::sync::CancellationToken;
+
+          /// Stub implementation of `FdReceiver`.
+          ///
+          /// The real implementation was removed; this version only exists so that the
+          /// crate keeps compiling. All methods return an error at runtime and perform
+          /// no socket / fd handling.
+          pub struct FdReceiver;
+
+          impl FdReceiver {
+              pub fn bind(_name: &str) -> Result<Self> {
+                  bail!("FdReceiver is a stub and has no logic")
+              }
+
+              pub async fn receive(&self, _cancel: &CancellationToken) -> Result<File> {
+                  bail!("FdReceiver is a stub and has no logic")
+              }
+          }
+
+          #[cfg(test)]
+          mod tests {
+              use super::FdReceiver;
+              use tokio_util::sync::CancellationToken;
+
+              #[test]
+              fn bind_is_a_stub() {
+                  assert!(FdReceiver::bind("stub-test").is_err());
+              }
+
+              #[tokio::test]
+              async fn receive_is_a_stub() {
+                  let receiver = FdReceiver;
+                  let cancel = CancellationToken::new();
+                  assert!(receiver.receive(&cancel).await.is_err());
+              }
+          }
+          EOF
       - name: Build
         run: cargo build --release --target x86_64-apple-darwin
         working-directory: ${{ env.WORKING_DIR }}
@@ -510,6 +552,48 @@ jobs:
           key: ${{ runner.os }}-cargo-ios-sim-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-ios-sim-
+      - name: Replace tun.rs with Apple stub
+        run: |
+          cat > rust-client/tun.rs <<'EOF'
+          use anyhow::{Result, bail};
+          use std::fs::File;
+          use tokio_util::sync::CancellationToken;
+
+          /// Stub implementation of `FdReceiver`.
+          ///
+          /// The real implementation was removed; this version only exists so that the
+          /// crate keeps compiling. All methods return an error at runtime and perform
+          /// no socket / fd handling.
+          pub struct FdReceiver;
+
+          impl FdReceiver {
+              pub fn bind(_name: &str) -> Result<Self> {
+                  bail!("FdReceiver is a stub and has no logic")
+              }
+
+              pub async fn receive(&self, _cancel: &CancellationToken) -> Result<File> {
+                  bail!("FdReceiver is a stub and has no logic")
+              }
+          }
+
+          #[cfg(test)]
+          mod tests {
+              use super::FdReceiver;
+              use tokio_util::sync::CancellationToken;
+
+              #[test]
+              fn bind_is_a_stub() {
+                  assert!(FdReceiver::bind("stub-test").is_err());
+              }
+
+              #[tokio::test]
+              async fn receive_is_a_stub() {
+                  let receiver = FdReceiver;
+                  let cancel = CancellationToken::new();
+                  assert!(receiver.receive(&cancel).await.is_err());
+              }
+          }
+          EOF
       - name: Build for iOS Simulator
         run: cargo build --release --target x86_64-apple-ios
         working-directory: ${{ env.IOS_WORKING_DIR }}
@@ -545,6 +629,48 @@ jobs:
           key: ${{ runner.os }}-cargo-ios-dev-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-ios-dev-
+      - name: Replace tun.rs with Apple stub
+        run: |
+          cat > rust-client/tun.rs <<'EOF'
+          use anyhow::{Result, bail};
+          use std::fs::File;
+          use tokio_util::sync::CancellationToken;
+
+          /// Stub implementation of `FdReceiver`.
+          ///
+          /// The real implementation was removed; this version only exists so that the
+          /// crate keeps compiling. All methods return an error at runtime and perform
+          /// no socket / fd handling.
+          pub struct FdReceiver;
+
+          impl FdReceiver {
+              pub fn bind(_name: &str) -> Result<Self> {
+                  bail!("FdReceiver is a stub and has no logic")
+              }
+
+              pub async fn receive(&self, _cancel: &CancellationToken) -> Result<File> {
+                  bail!("FdReceiver is a stub and has no logic")
+              }
+          }
+
+          #[cfg(test)]
+          mod tests {
+              use super::FdReceiver;
+              use tokio_util::sync::CancellationToken;
+
+              #[test]
+              fn bind_is_a_stub() {
+                  assert!(FdReceiver::bind("stub-test").is_err());
+              }
+
+              #[tokio::test]
+              async fn receive_is_a_stub() {
+                  let receiver = FdReceiver;
+                  let cancel = CancellationToken::new();
+                  assert!(receiver.receive(&cancel).await.is_err());
+              }
+          }
+          EOF
       - name: Build for iOS Device
         run: cargo build --release --target aarch64-apple-ios
         working-directory: ${{ env.IOS_WORKING_DIR }}

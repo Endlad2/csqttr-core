@@ -119,6 +119,9 @@ struct Arguments {
     salt: String,
     #[arg(long, default_value = "")]
     tun_uds: String,
+    /// Optional password. If omitted, the CSQTT_PASSWORD env var is used.
+    #[arg(long, default_value = "", allow_hyphen_values = true)]
+    password: String,
     #[arg(long, default_value_t = false)]
     validate_vk_hashes: bool,
     #[arg(long = "domain-routing", default_value_t = false)]
@@ -141,6 +144,21 @@ struct Arguments {
     direct_ips: String,
     #[arg(long = "exact-workers", default_value_t = false)]
     exact_workers: bool,
+}
+
+impl Arguments {
+    /// Resolves the password: CLI `--password` takes precedence, otherwise
+    /// falls back to the `CSQTT_PASSWORD` environment variable.
+    fn resolve_password(&self) -> Result<String> {
+        if !self.password.is_empty() {
+            return Ok(self.password.clone());
+        }
+        let from_env = std::env::var("CSQTT_PASSWORD").unwrap_or_default();
+        if from_env.is_empty() {
+            bail!("[КЛИЕНТ] Нужен пароль: укажи --password или переменную CSQTT_PASSWORD");
+        }
+        Ok(from_env)
+    }
 }
 
 fn main() {
@@ -236,10 +254,8 @@ async fn run(arguments: Arguments) -> Result<i32> {
     if arguments.peer.is_empty() || (!js_hash_mode && arguments.vk.is_empty()) {
         bail!("[КЛИЕНТ] Нужны -peer и хеши VK");
     }
-    let password = std::env::var("CSQTT_PASSWORD").unwrap_or_default();
-    if password.is_empty() {
-        bail!("[КЛИЕНТ] Нужен пароль в переменной CSQTT_PASSWORD");
-    }
+    // --password has priority; fall back to CSQTT_PASSWORD env var.
+    let password = arguments.resolve_password()?;
     let mut stdin = spawn_stdin_reader();
     let peer = resolve_peer(&arguments.peer).await?;
     let mode = ObfsMode::parse(&arguments.obfs)?;
@@ -578,6 +594,7 @@ fn normalize_cli_argument(argument: String) -> String {
         "gen",
         "salt",
         "tun-uds",
+        "password",
         "validate-vk-hashes",
         "domain-routing",
         "exclude-ru-zones",
@@ -868,6 +885,14 @@ fn print_configuration(
     );
     crate::log_error!("[WRAP] WRAP Ключ вычислен ✓");
     crate::log_error!("[КЛИЕНТ] Captcha: {captcha}");
+    crate::log_error!(
+        "[КЛИЕНТ] Пароль: {}",
+        if arguments.password.is_empty() {
+            "из CSQTT_PASSWORD"
+        } else {
+            "из --password"
+        }
+    );
     if arguments.domain_routing {
         crate::log_error!(
             "[КЛИЕНТ] Доменная маршрутизация: ВКЛ (RU/SU/РФ: {}, кастомных доменов: {})",
@@ -998,7 +1023,7 @@ mod worker_count_tests {
                 "--password",
                 "secret",
             ])
-            .is_err()
+            .is_ok()
         );
     }
 
@@ -1013,6 +1038,36 @@ mod worker_count_tests {
         ])
         .unwrap();
         assert_eq!(arguments.vk, "-Wabc,-Wdef");
+    }
+
+    #[test]
+    fn password_flag_overrides_env() {
+        let arguments = Arguments::try_parse_from([
+            "csqtt-client",
+            "--peer",
+            "127.0.0.1:9000",
+            "--vk",
+            "abc",
+            "--password",
+            "cli-secret",
+        ])
+        .unwrap();
+        assert_eq!(arguments.resolve_password().unwrap(), "cli-secret");
+    }
+
+    #[test]
+    fn password_flag_accepts_hyphenated_values() {
+        let arguments = Arguments::try_parse_from([
+            "csqtt-client",
+            "--peer",
+            "127.0.0.1:9000",
+            "--vk",
+            "abc",
+            "--password",
+            "-secret-",
+        ])
+        .unwrap();
+        assert_eq!(arguments.resolve_password().unwrap(), "-secret-");
     }
 
     #[tokio::test]
